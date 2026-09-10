@@ -1,0 +1,11 @@
+data
+.venv/
+.hf/
+.pydeps/
+salidas/
+logs/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+.claude/
