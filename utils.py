@@ -20,7 +20,13 @@ from torch.utils.data import DataLoader, Dataset
 CLASS_NAMES = ['background', 'track', 'kart', 'pickup', 'nitro', 'bomb', 'projectile']
 NUM_CLASSES = 7
 
-VAL_TRACKS = ['volcano_island', 'lighthouse']
+PLIEGUES = {
+    'f1': ['volcano_island', 'lighthouse'],
+    'f2': ['gran_paradiso_island', 'hacienda'],
+    'f3': ['abyss', 'olivermath'],
+}
+
+VAL_TRACKS = PLIEGUES['f1']
 
 PALETTE = np.array([
     [  0,   0,   0],
@@ -67,15 +73,18 @@ def list_samples(data_root, tracks):
     return samples
 
 
-def split_tracks(data_root, split):
+def split_tracks(data_root, split, val_tracks=None):
     all_tracks = list_tracks(data_root)
     if split == 'all':
         return all_tracks
-    val = [t for t in all_tracks if t in VAL_TRACKS]
+    val_set = set(val_tracks if val_tracks else VAL_TRACKS)
+    desconocidos = val_set - set(all_tracks)
+    if desconocidos:
+        raise ValueError('tracks de validacion inexistentes: %s' % sorted(desconocidos))
     if split == 'val':
-        return val
+        return [t for t in all_tracks if t in val_set]
     if split == 'train':
-        return [t for t in all_tracks if t not in VAL_TRACKS]
+        return [t for t in all_tracks if t not in val_set]
     raise ValueError("split debe ser 'train', 'val' o 'all'; llego %r" % split)
 
 
@@ -128,8 +137,8 @@ class STKSegmentationDataset(Dataset):
 
 
 def load_data(data_root, split='train', size=(448, 448), batch_size=8,
-              num_workers=4, augment=False, limit=None, shuffle=None):
-    dataset = STKSegmentationDataset(data_root, split_tracks(data_root, split),
+              num_workers=4, augment=False, limit=None, shuffle=None, val_tracks=None):
+    dataset = STKSegmentationDataset(data_root, split_tracks(data_root, split, val_tracks),
                                      size=size, augment=augment)
     if limit is not None and limit < len(dataset):
         dataset = torch.utils.data.Subset(dataset, list(range(limit)))

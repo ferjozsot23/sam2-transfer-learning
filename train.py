@@ -1,4 +1,4 @@
-"""Loop de entrenamiento de la cabeza sobre el encoder congelado de SAM 2.
+"""Loop de entrenamiento de la cabeza y, opcionalmente, del encoder de SAM 2.
 
 Vive en un modulo aparte para que el notebook lo importe y lo ejecute, y para
 que el servidor pueda lanzarlo como script sin depender de un kernel de Jupyter.
@@ -46,6 +46,7 @@ def evaluate(model, loader, device, criterion):
 
 def train(args):
     device = pick_device(args.device)
+    val_tracks = getattr(args, 'val_tracks', None) or None
     ckpt_dir = os.path.abspath(args.ckpt_dir)
     os.makedirs(ckpt_dir, exist_ok=True)
     out_path = os.path.abspath(args.out)
@@ -54,15 +55,15 @@ def train(args):
     print('device       :', device)
     print('torch        :', torch.__version__)
     print('data-root    :', os.path.abspath(args.data_root))
-    print('tracks train :', split_tracks(args.data_root, 'train'))
-    print('tracks val   :', split_tracks(args.data_root, 'val'))
+    print('tracks train :', split_tracks(args.data_root, 'train', val_tracks))
+    print('tracks val   :', split_tracks(args.data_root, 'val', val_tracks))
     print('backbone     :', args.backbone, '| dim', args.dim, '| size', args.size)
     print('out          :', out_path)
 
-    train_loader = load_data(args.data_root, 'train', size=(args.size, args.size),
+    train_loader = load_data(args.data_root, 'train', val_tracks=val_tracks, size=(args.size, args.size),
                              batch_size=args.batch_size, num_workers=args.num_workers,
                              augment=not args.no_augment, limit=args.limit)
-    val_loader = load_data(args.data_root, 'val', size=(args.size, args.size),
+    val_loader = load_data(args.data_root, 'val', val_tracks=val_tracks, size=(args.size, args.size),
                            batch_size=args.batch_size, num_workers=args.num_workers,
                            augment=False, limit=args.limit)
     print('batches      : train=%d val=%d' % (len(train_loader), len(val_loader)))
@@ -71,7 +72,7 @@ def train(args):
         weights = None
         print('class_weights: DESACTIVADOS')
     else:
-        ds = STKSegmentationDataset(args.data_root, split_tracks(args.data_root, 'train'),
+        ds = STKSegmentationDataset(args.data_root, split_tracks(args.data_root, 'train', val_tracks),
                                     size=(args.size, args.size))
         weights = compute_class_weights(ds, cache_path=args.weights,
                                         power=args.weight_power,
@@ -113,7 +114,13 @@ def train(args):
         if os.path.isfile(resume_path):
             ck = torch.load(resume_path, map_location='cpu', weights_only=False)
             model.head.load_state_dict(ck['head'])
+            if ck.get('encoder'):
+                _, sobran = model.encoder.load_state_dict(ck['encoder'], strict=False)
+                if sobran:
+                    raise RuntimeError('claves desconocidas en el encoder: %s' % sobran[:3])
             optimizer.load_state_dict(ck['optimizer'])
+            if 'scheduler' in ck:
+                scheduler.load_state_dict(ck['scheduler'])
             start_epoch = ck['epoch'] + 1
             best_miou = ck.get('best_miou', -1.0)
             print('resume desde %s (epoca %d, best_miou %.4f)'
@@ -167,7 +174,11 @@ def train(args):
                       % (since_best, best_epoch, best_miou))
                 break
 
-        torch.save({'head': model.head.state_dict(), 'optimizer': optimizer.state_dict(),
+        entrenados = {n for n, p in model.encoder.named_parameters() if p.requires_grad}
+        torch.save({'head': model.head.state_dict(),
+                    'encoder': {k: v for k, v in model.encoder.state_dict().items()
+                                if k in entrenados},
+                    'optimizer': optimizer.state_dict(), 'scheduler': scheduler.state_dict(),
                     'epoch': epoch, 'best_miou': best_miou, 'args': vars(args)}, last_ckpt)
         _log_run(args, epoch, train_loss, miou, cm.class_iou, lr_now)
 
@@ -238,6 +249,8 @@ def main():
     ap.add_argument('--runs-csv', default='experimentos/resultados/runs.csv')
     ap.add_argument('--notes', default='')
     ap.add_argument('--early-stop', type=int, default=0)
+    ap.add_argument('--val-tracks', nargs='+', default=None,
+                    help='circuitos de validacion; por defecto utils.VAL_TRACKS')
     train(ap.parse_args())
 
 

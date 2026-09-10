@@ -19,11 +19,29 @@ if [ -n "$PL" ]; then
     ep="$(grep -c '=== EPOCH' "$f" 2>/dev/null | head -1)"
     ult="$(grep -E '=== EPOCH' "$f" 2>/dev/null | tail -1)"
     mio="$(grep -E '^mIoU' "$f" 2>/dev/null | tail -1)"
-    echo "  gpu $g: ${n:-0}/${t:-?} terminadas | ${ep:-0} epocas | en curso: ${cur:-?}"
+    seg="$(grep -E '^seg' "$f" 2>/dev/null | tail -3 | awk '{s+=$2; n++} END {if(n)printf "%.1f", s/n}')"
+    echo "  gpu $g: ${n:-0}/${t:-?} terminadas | ${ep:-0} epocas | ${seg:-?} s/epoca | en curso: ${cur:-?}"
     [ -n "$ult" ] && echo "          $ult   $mio"
     docker ps --filter name=sam2_g$g --format '{{.Names}}' | grep -q . && VIVOS=$((VIVOS+1))
   done
   echo "  contenedores vivos: $VIVOS"
+
+  SEGT="$(cat $P/logs/par_${TSX}_g*.log 2>/dev/null | grep -E '^seg' | tail -20 \
+          | awk '{s+=$2; n++} END {if(n)printf "%.1f", s/n}')"
+  HECHAS="$(cat $P/logs/par_${TSX}_g*.log 2>/dev/null | grep -c '^>>> ')"
+  UNO="$(ls $P/logs/par_${TSX}_g*.log | head -1)"
+  TOTAL="$(grep -m1 -oE '\(de [0-9]+\)' "$UNO" 2>/dev/null | tr -dc '0-9')"
+  [ -z "$TOTAL" ] && TOTAL="$(grep -m1 -oE 'BARRIDO: [0-9]+' "$UNO" 2>/dev/null | tr -dc '0-9')"
+  NG="$(ls $P/logs/par_${TSX}_g*.log 2>/dev/null | wc -l | tr -d ' ')"
+  [ -n "$SEGT" ] && awk -v s="$SEGT" -v h="$HECHAS" -v t="${TOTAL:-0}" -v g="$NG" 'BEGIN{
+      if (t>0 && g>0) {
+        base = s*30/60;
+        factor = 1.5;
+        printf "  ritmo: %.1f s/epoca -> %.1f min la combinacion mas barata (none)\n", s, base;
+        printf "  quedan %d de %d combinaciones\n", t-h, t;
+        printf "  estimado total: ~%.0f min desde el arranque (%d gpus en paralelo)\n",
+               t*base*factor/g, g;
+      }}'
 
   echo; echo "== combinaciones terminadas =="
   cat $P/logs/par_${TSX}_g*.log 2>/dev/null | grep -E '^>>> ' \

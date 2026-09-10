@@ -32,7 +32,9 @@ def num(v):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--glob', default=os.path.join(RESULTADOS, 'sweep*.csv'))
+    ap.add_argument('--glob', default=os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'salidas', 'resultados_crudos', 'sweep*.csv'))
     ap.add_argument('--out', default=os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         'salidas', 'consolidado.csv'))

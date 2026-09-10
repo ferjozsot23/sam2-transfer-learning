@@ -4,8 +4,9 @@
     python predict.py imagen.png
     python predict.py carpeta/ --out resultados/ --masks
 
-El .th guarda solo la cabeza (unos 3 MB): el encoder de SAM 2 se reconstruye al
-cargar, descargando su checkpoint la primera vez. Necesita el paquete sam2.
+Si falta model.th lo descarga de la ultima release del repositorio (~860 MB). El
+fichero incluye el encoder de SAM 2 ya afinado, asi que no hace falta descargar
+ademas el checkpoint preentrenado. Necesita el paquete sam2.
 """
 
 import argparse
@@ -13,6 +14,33 @@ import os
 import sys
 
 IMG_EXT = ('.png', '.jpg', '.jpeg', '.bmp', '.webp')
+MODEL_URL = os.environ.get(
+    'STK_MODEL_URL',
+    'https://github.com/ferjozsot23/sam2-transfer-learning/releases/latest/download/model.th')
+
+
+def ensure_model(path):
+    if os.path.exists(path):
+        return path
+    import urllib.request
+
+    print('Descargando el modelo desde %s' % MODEL_URL, flush=True)
+    temporal = path + '.parcial'
+
+    def progreso(bloques, tam, total):
+        if total > 0:
+            print('\r  %3d%%' % min(100, bloques * tam * 100 // total), end='', flush=True)
+
+    try:
+        urllib.request.urlretrieve(MODEL_URL, temporal, progreso)
+    except Exception as e:
+        if os.path.exists(temporal):
+            os.remove(temporal)
+        sys.exit('\nNo se pudo descargar el modelo (%s). Descargalo de la seccion Releases '
+                 'del repositorio y dejalo como %s.' % (e, path))
+    os.replace(temporal, path)
+    print('\r  completado')
+    return path
 
 
 def main():
@@ -34,8 +62,7 @@ def main():
     from models import load_model
     from utils import CLASS_NAMES, NUM_CLASSES, label_to_color, overlay
 
-    if not os.path.exists(args.model):
-        sys.exit("No se encuentra '%s'. Debe estar junto a models.py." % args.model)
+    ensure_model(args.model)
 
     device = args.device
     if device == 'auto':

@@ -22,7 +22,7 @@ import traceback
 import torch
 
 from train import train
-from utils import CLASS_NAMES
+from utils import CLASS_NAMES, PLIEGUES
 
 def parse_modo(m):
     if m == 'none':
@@ -36,15 +36,16 @@ def parse_modo(m):
     raise ValueError("modo %r no valido: usa none, neck, bN o bNsolo" % m)
 
 CAMPOS = (['combo', 'backbone', 'size', 'dim', 'lr', 'weight_power', 'modo',
-           'encoder_lr', 'augment', 'best_epoch', 'best_miou', 'top5', 'sigma']
+           'encoder_lr', 'rep', 'pliegue', 'augment', 'best_epoch', 'best_miou', 'top5', 'sigma']
           + ['iou_' + c for c in CLASS_NAMES] + ['minutos', 'estado'])
 
 
-def construir(base, backbone, size, dim, lr, power, modo, elr, tag):
+def construir(base, backbone, size, dim, lr, power, modo, elr, pliegue, tag):
     a = copy.deepcopy(base)
     a.backbone, a.size, a.dim, a.lr, a.weight_power = backbone, size, dim, lr, power
     a.unfreeze_blocks, a.unfreeze_neck = parse_modo(modo)
     a.encoder_lr = elr
+    a.val_tracks = PLIEGUES[pliegue]
     a.notes = tag
     a.out = os.path.join(base.out_dir, 'model_%s.th' % tag)
     a.ckpt_dir = os.path.join(base.out_dir, 'ck_%s' % tag)
@@ -64,6 +65,10 @@ def main():
                     help='none=congelado, neck=solo cuello, bN=N bloques finales + cuello, '
                          'bNsolo=N bloques sin cuello')
     ap.add_argument('--encoder-lrs', type=float, nargs='+', default=[1e-4])
+    ap.add_argument('--repeticiones', type=int, default=1,
+                    help='repite la rejilla N veces para medir la varianza entre corridas')
+    ap.add_argument('--pliegues', nargs='+', default=['f1'], choices=sorted(PLIEGUES),
+                    help='particiones de validacion por circuito')
     ap.add_argument('--epochs', type=int, default=40)
     ap.add_argument('--early-stop', type=int, default=10)
     ap.add_argument('--batch-size', type=int, default=8)
@@ -93,7 +98,7 @@ def main():
     os.makedirs(os.path.dirname(args.results_csv) or '.', exist_ok=True)
     rejilla = list(itertools.product(args.backbones, args.sizes, args.dims,
                                      args.lrs, args.powers, args.modos,
-                                     args.encoder_lrs))
+                                     args.encoder_lrs, range(1, args.repeticiones + 1), args.pliegues))
     total = len(rejilla)
     if args.num_shards > 1:
         rejilla = rejilla[args.shard::args.num_shards]
@@ -103,21 +108,21 @@ def main():
           % (args.shard, args.num_shards, len(rejilla), total)
           if args.num_shards > 1 else 'BARRIDO: %d combinaciones' % total)
     for i, c in enumerate(rejilla, 1):
-        print('  %2d/%d  backbone=%s size=%d dim=%d lr=%.0e power=%.2f modo=%s elr=%.0e'
+        print('  %2d/%d  backbone=%s size=%d dim=%d lr=%.0e power=%.2f modo=%s elr=%.0e rep=%d pliegue=%s'
               % ((i, len(rejilla)) + c))
     print('=' * 78, flush=True)
     if args.dry_run:
         return
 
     filas = []
-    for i, (bb, sz, dm, lr, pw, mo, el) in enumerate(rejilla, 1):
-        tag = '%s_s%d_d%d_lr%g_p%.2f_%s_el%g' % (bb, sz, dm, lr, pw, mo, el)
+    for i, (bb, sz, dm, lr, pw, mo, el, rep, pl) in enumerate(rejilla, 1):
+        tag = '%s_s%d_d%d_lr%g_p%.2f_%s_el%g_r%d_%s' % (bb, sz, dm, lr, pw, mo, el, rep, pl)
         print('\n' + '#' * 78)
         print('# %d/%d  %s' % (i, len(rejilla), tag))
         print('#' * 78, flush=True)
         t0 = time.time()
         try:
-            r = train(construir(args, bb, sz, dm, lr, pw, mo, el, tag))
+            r = train(construir(args, bb, sz, dm, lr, pw, mo, el, pl, tag))
             estado = 'ok'
         except Exception:
             traceback.print_exc()
@@ -127,7 +132,7 @@ def main():
             estado = 'ERROR'
         mins = (time.time() - t0) / 60.0
         filas.append(dict(zip(CAMPOS,
-            [tag, bb, sz, dm, lr, pw, mo, el, int(not args.no_augment),
+            [tag, bb, sz, dm, lr, pw, mo, el, rep, pl, int(not args.no_augment),
              r['best_epoch'], r['best_miou'], r['top5'], r['sigma']]
             + list(r['class_iou']) + [round(mins, 2), estado])))
         with open(args.results_csv, 'w', newline='') as fh:
