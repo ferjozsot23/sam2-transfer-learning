@@ -47,6 +47,15 @@ logits (B,7,448,448) → interpolados al tamaño original
 
 ## Probarlo
 
+### Sin instalar nada — Colab
+
+[![Abrir en Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ferjozsot23/sam2-transfer-learning/blob/main/demo.ipynb)
+
+Abre el notebook, *Ejecutar todas*, y sube tus imágenes cuando lo pida. Devuelve las
+máscaras en un zip.
+
+### En local
+
 ```bash
 pip install -r requirements.txt
 python predict.py ejemplos/
@@ -177,6 +186,7 @@ inventaría clases inexistentes en los bordes.
 
 ```
 train.ipynb           ENTREGABLE — métricas e imágenes segmentadas
+demo.ipynb            notebook de Colab, sin instalación
 utils.py              ENTREGABLE — dataset, métricas, pesos de clase
 model.th              ENTREGABLE — modelo entrenado (10 MB)
 models.py             la U-Net sobre SAM 2, save_model / load_model
