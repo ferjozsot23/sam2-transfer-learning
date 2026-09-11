@@ -226,22 +226,22 @@ def fig_validacion_cruzada(modo):
     plt.close(fig)
 
 
-def fig_entrenamiento_validacion(modo):
-    t = TH[modo]
+def curvas_modelo_final():
     filas = sorted((int(r['epoch']), float(r['train_loss']), float(r['val_loss']), float(r['val_miou']))
                    for r in csv.DictReader(open('experimentos/resultados/epocas.csv'))
                    if r['lote'] == '20260909_204201' and r['notes'] == MODELO_FINAL)
-    ep, tr, va, mi = map(list, zip(*filas))
-    mejor = mi.index(max(mi))
+    return map(list, zip(*filas))
+
+
+def fig_entrenamiento_validacion(modo):
+    t = TH[modo]
+    ep, tr, va, _ = curvas_modelo_final()
 
     fig, ax = plt.subplots(figsize=(8.6, 4.6))
     ax.plot(ep, tr, color=t['serie'], lw=2.2, zorder=3)
     ax.plot(ep, va, color=t['serie2'], lw=2.2, zorder=3)
     ax.text(ep[-1] + 0.4, tr[-1], 'entrenamiento', color=t['serie'], va='center', fontsize=10)
     ax.text(ep[-1] + 0.4, va[-1], 'validación', color=t['serie2'], va='center', fontsize=10)
-    ax.axvline(ep[mejor], color=t['ink3'], lw=1, ls=(0, (4, 3)), zorder=2)
-    ax.text(ep[mejor] + 0.3, max(va), 'época guardada\nmejor mIoU de validación: %.3f' % mi[mejor],
-            color=t['ink2'], fontsize=9.5, va='top')
     ax.set_xlim(-0.5, ep[-1] + 4.8)
     ax.set_ylim(0, max(va) * 1.05)
     ax.set_xlabel('época', color=t['ink2'], fontsize=9.5)
@@ -249,14 +249,41 @@ def fig_entrenamiento_validacion(modo):
     ax.yaxis.grid(True, color=t['grid'], lw=1, zorder=0)
     ax.set_axisbelow(True)
     estilo(fig, ax, t)
-    fig.suptitle('Entrenamiento vs validación del modelo final',
+    fig.suptitle('Pérdida de entrenamiento vs validación',
                  color=t['ink'], fontsize=12.5, x=0.012, ha='left', y=0.975)
-    fig.text(0.012, 0.9, 'la pérdida de validación se estanca desde la época %d, pero el mIoU sigue '
-             'subiendo hasta la %d' % (ep[va.index(min(va))], ep[mejor]),
-             color=t['ink2'], fontsize=9.5, ha='left')
+    fig.text(0.012, 0.9, 'la de entrenamiento sigue bajando; la de validación se estanca desde la época %d'
+             % ep[va.index(min(va))], color=t['ink2'], fontsize=9.5, ha='left')
     fig.tight_layout(rect=[0, 0, 1, 0.86])
     fig.savefig('docs/figuras/entrenamiento-validacion-%s.png' % modo, dpi=170,
                 facecolor=t['surface'])
+    plt.close(fig)
+
+
+def fig_miou_validacion(modo):
+    t = TH[modo]
+    ep, _, _, mi = curvas_modelo_final()
+    mejor = mi.index(max(mi))
+
+    fig, ax = plt.subplots(figsize=(8.6, 4.6))
+    ax.plot(ep, mi, color=t['serie'], lw=2.2, zorder=3)
+    ax.axvline(ep[mejor], color=t['ink3'], lw=1, ls=(0, (4, 3)), zorder=2)
+    ax.scatter([ep[mejor]], [mi[mejor]], s=70, color=t['serie'], edgecolor=t['surface'],
+               linewidth=2, zorder=4)
+    ax.text(ep[mejor] + 0.5, mi[mejor] + 0.008, 'época %d · %.3f' % (ep[mejor], mi[mejor]),
+            color=t['ink'], fontsize=10.5, va='bottom')
+    ax.set_xlim(-0.5, ep[-1] + 1.5)
+    ax.set_ylim(min(mi) - 0.03, max(mi) + 0.06)
+    ax.set_xlabel('época', color=t['ink2'], fontsize=9.5)
+    ax.set_ylabel('mIoU de validación', color=t['ink2'], fontsize=9.5)
+    ax.yaxis.grid(True, color=t['grid'], lw=1, zorder=0)
+    ax.set_axisbelow(True)
+    estilo(fig, ax, t)
+    fig.suptitle('mIoU de validación del modelo final',
+                 color=t['ink'], fontsize=12.5, x=0.012, ha='left', y=0.975)
+    fig.text(0.012, 0.9, 'sube hasta la época %d, que es la que se guarda' % ep[mejor],
+             color=t['ink2'], fontsize=9.5, ha='left')
+    fig.tight_layout(rect=[0, 0, 1, 0.86])
+    fig.savefig('docs/figuras/miou-validacion-%s.png' % modo, dpi=170, facecolor=t['surface'])
     plt.close(fig)
 
 
@@ -269,5 +296,6 @@ if __name__ == '__main__':
         fig_descongelado(modo)
         fig_validacion_cruzada(modo)
         fig_entrenamiento_validacion(modo)
+        fig_miou_validacion(modo)
         fig_cualitativa(modo, ejemplos)
         print('figuras', modo)

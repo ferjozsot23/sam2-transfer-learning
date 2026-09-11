@@ -181,12 +181,21 @@ pliegues, **+0.037**, es la estimación realista.
 
 ### Entrenamiento vs validación
 
+Curvas del modelo final: entrenado con `abyss`, `gran_paradiso_island`, `hacienda` y
+`olivermath`, y validado en `lighthouse` y `volcano_island` (pliegue f1).
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/entrenamiento-validacion-dark.png">
-  <img src="docs/figuras/entrenamiento-validacion-light.png" alt="Pérdida de entrenamiento y de validación del modelo final">
+  <img src="docs/figuras/entrenamiento-validacion-light.png" alt="Pérdida de entrenamiento y de validación por época">
 </picture>
 
 La pérdida de entrenamiento sigue bajando y la de validación se estanca desde la época 3.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/miou-validacion-dark.png">
+  <img src="docs/figuras/miou-validacion-light.png" alt="mIoU de validación por época">
+</picture>
+
 El mIoU de validación, en cambio, sigue subiendo hasta la época 15, que es la que se guarda:
 el modelo se vuelve más confiado en los píxeles que falla, que es lo que la CrossEntropy
 penaliza, pero acierta más píxeles.
