@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Se ejecuta EN LOCAL:  bash servidor/gpus.sh
+# Se ejecuta EN LOCAL:  STK_SERVER=usuario@host bash servidor/gpus.sh
 # Memoria libre por GPU y quien las esta usando. Solo lee.
 set -euo pipefail
-ssh fsotoj@172.28.230.10 'bash -s' <<'REMOTE'
+ssh "${STK_SERVER:?define STK_SERVER=usuario@host}" 'bash -s' <<'REMOTE'
 echo "== memoria libre =="
 nvidia-smi --query-gpu=index,memory.free,memory.total,utilization.gpu \
            --format=csv,noheader | sed 's/^/  gpu /'

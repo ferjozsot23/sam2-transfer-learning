@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Se ejecuta EN LOCAL:  bash servidor/recoger.sh [--sin-modelos]
+# Se ejecuta EN LOCAL:  STK_SERVER=usuario@host bash servidor/recoger.sh [--sin-modelos]
 # Descarga metricas y logs primero, y despues (salvo --sin-modelos) los modelos.
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-SERVER=fsotoj@172.28.230.10
-REMOTE=/home/fsotoj/sam2_stk
+SERVER="${STK_SERVER:?define STK_SERVER=usuario@host}"
 MODELOS=1
 [ "${1:-}" = "--sin-modelos" ] && MODELOS=0
 
@@ -14,6 +13,7 @@ mkdir -p "$HOME/.ssh"
 SSH=(ssh -o ControlMaster=auto -o "ControlPath=$CTL" -o ControlPersist=10m)
 trap '"${SSH[@]}" -O exit "$SERVER" 2>/dev/null || true' EXIT
 export RSYNC_RSH="ssh -o ControlMaster=auto -o ControlPath=$CTL -o ControlPersist=10m"
+REMOTE="${STK_REMOTE:-$("${SSH[@]}" "$SERVER" 'echo "$HOME/sam2_stk"')}"
 
 mkdir -p logs salidas/resultados_crudos
 

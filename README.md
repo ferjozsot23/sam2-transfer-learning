@@ -4,42 +4,35 @@ Transfer learning desde **Segment Anything Model 2** para clasificar cada píxel
 frame del videojuego en una de 7 clases: `background`, `track`, `kart`, `pickup`,
 `nitro`, `bomb`, `projectile`.
 
-*Proyecto Final · Visión Artificial 202610 · Universidad San Francisco de Quito*
-
-**mIoU 0.6008** sobre dos circuitos nunca vistos, frente a 0.4629 de una U-Net entrenada
-desde cero con el mismo dataset y el mismo split.
+**mIoU 0.6008** en dos circuitos que no se usaron para entrenar.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/cualitativo-dark.png">
   <img src="docs/figuras/cualitativo-light.png" alt="Predicciones sobre circuitos de validación">
 </picture>
 
-Ninguno de estos circuitos se usó para entrenar.
-
 ---
 
-## Por qué SAM 2 no sirve tal cual
+## Enfoque
 
 SAM 2 **no es un segmentador semántico**. Es *promptable* y *binario*: recibe una imagen
 más un prompt —un punto, una caja— y devuelve la máscara del objeto señalado. No sabe qué
 es un kart ni distingue siete clases.
 
-Lo que sí tiene es un **image encoder** entrenado sobre millones de máscaras. El transfer
-learning consiste en:
+Lo que sí tiene es un **image encoder** entrenado sobre millones de máscaras. El modelo:
 
-1. Reutilizar ese encoder, con sus pesos preentrenados, como extractor de features.
-2. Descartar la *memory attention* (es para vídeo) y el *mask decoder* original (es binario).
-3. Añadir una **cabeza nueva** que fusiona los tres niveles del FPN y produce 7 logits por píxel.
-4. **Afinar el encoder entero** con un learning rate cien veces menor que el de la cabeza,
-   para adaptarlo al aspecto de un videojuego sin destruir lo que ya sabe.
+1. Reutiliza ese encoder, con sus pesos preentrenados, como extractor de features.
+2. Descarta la *memory attention* (es para vídeo) y el *mask decoder* original (es binario).
+3. Añade una **cabeza nueva** que fusiona los tres niveles del FPN y produce 7 logits por píxel.
+4. **Afina el encoder entero** con un learning rate cien veces menor que el de la cabeza.
 
 ## Arquitectura
 
 - **Encoder**: SAM 2.1 Hiera-Large, pesos preentrenados, afinado entero con `lr` 1e-5
   (212.7 M parámetros).
 - **Features**: `backbone_fpn`, 3 niveles de 256 canales a strides 4, 8 y 16.
-- **Cabeza**: FPN de grueso a fino, nueva, con `lr` 1e-3 (2.56 M parámetros), terminada en
-  una convolución 1×1 a 7 logits por píxel, sin softmax.
+- **Cabeza**: FPN de grueso a fino con `lr` 1e-3 (2.56 M parámetros), terminada en una
+  convolución 1×1 a 7 logits por píxel, sin softmax.
 - **Entrada y salida**: el `forward` normaliza, reescala a 448×448 y devuelve los logits al
   tamaño original de la imagen, así que acepta cualquier resolución.
 
@@ -77,10 +70,8 @@ pred  = model(x).argmax(1)
 `x` es un tensor `(B,3,H,W)` en `[0,1]` y la salida `(B,H,W)` con el índice de clase de
 cada píxel.
 
-**`model.th` pesa 861 MB** y está en la sección *Releases*, porque GitHub no admite ficheros
-de más de 100 MB; `predict.py` y el notebook lo descargan solos. Incluye el encoder afinado
-completo, así que no hace falta descargar además el checkpoint preentrenado de SAM 2: carga
-sin conexión.
+**`model.th` pesa 861 MB** y está en *Releases*; `predict.py` y el notebook lo descargan
+solos. Incluye el encoder afinado completo, así que carga sin conexión.
 
 ---
 
@@ -102,21 +93,21 @@ sin conexión.
 | projectile | 0.4124 |
 | **mIoU** | **0.6008** |
 
-Medido con una matriz de confusión acumulada sobre los 500 frames de validación, nunca
-promediando IoU por lote.
+Medido con una matriz de confusión acumulada sobre los 500 frames de validación. Es la
+mejor de 4 repeticiones de la misma configuración; la media de las cuatro es 0.571.
 
 **El split es por circuito, no por frame.** Los frames de un mismo circuito son casi
-idénticos —el kart avanza unos centímetros por frame— así que un split aleatorio pondría
-frames gemelos a ambos lados y daría un mIoU alto y falso.
+idénticos, así que un split aleatorio pondría frames gemelos a ambos lados y daría un mIoU
+alto y falso.
 
 | | circuitos | frames |
 |---|---|---|
 | entrenamiento | `abyss`, `gran_paradiso_island`, `hacienda`, `olivermath` | 1000 |
 | validación | `lighthouse`, `volcano_island` | 500 |
 
-### Contra una U-Net entrenada desde cero
+### Referencia: U-Net desde cero
 
-El mismo dataset y el mismo split se resolvieron antes sin transfer learning:
+Una U-Net entrenada desde cero con el mismo dataset y el mismo split:
 
 | clase | U-Net | SAM 2 | |
 |---|---|---|---|
@@ -129,145 +120,86 @@ El mismo dataset y el mismo split se resolvieron antes sin transfer learning:
 | nitro | **0.5352** | 0.4562 | −0.079 |
 | **mIoU** | 0.4629 | **0.6008** | **+0.138** |
 
-Gana en 6 de las 7 clases. El error dominante de la U-Net era confundir carretera con
-paisaje en circuitos no vistos; con SAM 2, `track` pasa de 0.7365 a 0.8743.
-
-**Cuánto hay que creerse el 0.6008.** Es la mejor de 4 repeticiones de la configuración
-elegida, medida en el mismo conjunto que se usó para elegirla, así que está optimistamente
-sesgado. La media de las 4 repeticiones es 0.571, y la validación cruzada estima que afinar
-el encoder aporta **+0.04** sobre dejarlo congelado, no el +0.07 que sale en este split.
-
 ---
 
-## Qué movió la aguja
+## Experimentos
 
-Se registraron **113 corridas** en cinco tandas (`experimentos/resultados/`). Estos son los
-efectos que superan el ruido:
+113 corridas, todas registradas en `experimentos/resultados/`. El `top5` de una corrida es
+la media de sus 5 mejores épocas de validación, más estable que el pico.
 
-| cambio | efecto |
-|---|---|
-| backbone `small` → `large` | +0.020 |
-| `dim` de la cabeza 128 → 256 | +0.020 |
-| `dim` 256 → 512 | −0.012 |
-| resolución 448 → 1024 | +0.001 por 5–7× el coste |
-| learning rate 1e-3 ↔ 3e-4 | nada |
-| exponente de los pesos de clase 0.20 ↔ 0.30 | nada |
-| **afinar el encoder entero, `encoder-lr` 1e-5** | **+0.037** en validación cruzada |
+| experimento | corridas | resultado |
+|---|---|---|
+| backbone × `dim` × `lr` × exponente de pesos | 24 | `large` +0.020 sobre `small`; `dim` 256 +0.020 sobre 128; `lr` y exponente, sin efecto |
+| backbone × resolución × `dim` | 7 | 1024 px no mejora a 448 px; `dim` 512 empeora (−0.012) |
+| descongelado del encoder × `encoder-lr` × 4 repeticiones | 74 | el encoder entero con `encoder-lr` 1e-5 es la mejor combinación |
+| validación cruzada por circuito | 8 | afinar el encoder mejora en los 3 pliegues, +0.037 de media |
 
-### Diseño experimental
+Entre 12 corridas idénticas el `top5` varía con σ 0.011, así que se comparan medias y no
+corridas sueltas.
 
-Cada tanda respondió una pregunta y decidió qué barrer en la siguiente.
-
-| tanda | rejilla | corridas | pregunta | respuesta |
-|---|---|---|---|---|
-| 1 | backbone × `dim` × `lr` × `power` | 24 | ¿qué hiperparámetros importan? | solo los de capacidad |
-| 2 | backbone × resolución × `dim` | 7 | ¿más resolución o cabeza más ancha? | ninguna de las dos aporta |
-| 3 | congelado vs cuello descongelado | 2 | ¿adaptar el encoder ayuda? | el cuello solo, no: −0.017 |
-| 4 | grado de descongelado × `encoder-lr` × 4 repeticiones | 72 | ¿cuánto y a qué velocidad? | entero con `elr` 1e-5: +0.073 |
-| 5 | validación cruzada por circuito | 8 | ¿el +0.073 generaliza? | sí, pero menos: +0.037 |
-
-La cuarta tanda cruzó **cuánto** encoder se descongela contra **a qué velocidad** se le deja
-moverse, repitiendo cada celda cuatro veces:
-
-| descongelado | del encoder | `elr` 1e-4 | `elr` 1e-5 | `elr` 1e-6 |
-|---|---|:---:|:---:|:---:|
-| ninguno | 0 | ●●●● | ●●●● | ●●●● |
-| cuello FPN | 0.55 M · 0.3% | ●●●● | ●●●● | ●●●● |
-| 3 bloques | 48 M · 23% | ●●●● | ●●●● | ●●●● |
-| 15 bloques | 107 M · 50% | ●●●● | ●●●● | ●●●● |
-| 28 bloques | 159 M · 75% | ●●●● | ●●●● | ●●●● |
-| 48 bloques | 213 M · 100% | ●●●● | ●●●● | ●●●● |
-
-Cada ● es una corrida de hasta 30 épocas con parada temprana. La primera fila son 12 corridas idénticas —el
-encoder congelado ignora `encoder-lr`— y mide cuánto varía el proyecto consigo mismo.
+### Cuánto descongelar el encoder
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/descongelado-dark.png">
   <img src="docs/figuras/descongelado-light.png" alt="mIoU según cuánto encoder se descongela y a qué learning rate">
 </picture>
 
-| descongelado | `elr` 1e-4 | `elr` 1e-5 | `elr` 1e-6 |
-|---|:---:|:---:|:---:|
-| ninguno | 0.483 | 0.494 | 0.496 |
-| cuello FPN | 0.464 | 0.487 | 0.485 |
-| 3 bloques | 0.470 | 0.483 | 0.470 |
-| 15 bloques | 0.500 | 0.509 | 0.505 |
-| 28 bloques | 0.528 | 0.548 | 0.501 |
-| 48 bloques | 0.542 | **0.564** | 0.509 |
+| descongelado | parámetros del encoder | `elr` 1e-4 | `elr` 1e-5 | `elr` 1e-6 |
+|---|---|:---:|:---:|:---:|
+| ninguno | 0 | 0.483 | 0.494 | 0.496 |
+| cuello FPN | 0.55 M · 0.3% | 0.464 | 0.487 | 0.485 |
+| 3 bloques | 48 M · 23% | 0.470 | 0.483 | 0.470 |
+| 15 bloques | 107 M · 50% | 0.500 | 0.509 | 0.505 |
+| 28 bloques | 159 M · 75% | 0.528 | 0.548 | 0.501 |
+| 48 bloques | 213 M · 100% | 0.542 | **0.564** | 0.509 |
 
-*`top5` medio de 4 repeticiones por celda.*
+*`top5` medio de 4 repeticiones por celda; `elr` es el learning rate del encoder.*
 
-**El resultado contradijo la hipótesis.** Se esperaba que, con 1000 imágenes de 4 circuitos,
-descongelar solo añadiera sobreajuste. No fue así:
-
-- **Descongelar poco empeora.** El cuello y los 3 últimos bloques quedan por debajo del
-  congelado en las tres velocidades.
-- **Descongelar todo, despacio, mejora.** Las 4 repeticiones de `48 bloques · elr 1e-5`
-  quedan por encima de las 12 del congelado, sin solaparse.
-- **La velocidad importa tanto como la profundidad.** Con `elr` 1e-6 los pesos apenas se
-  mueven y todo converge al congelado.
+- Descongelar solo el cuello o los últimos bloques queda por debajo del encoder congelado.
+- El encoder entero con `elr` 1e-5 es la mejor combinación: 0.564 frente a 0.491 del congelado.
+- Con `elr` 1e-6 los pesos apenas se mueven y el resultado queda cerca del congelado.
 
 ### Validación cruzada
 
-Como la tanda 4 eligió en el mismo par de circuitos de validación, se repitió la comparación
-congelado vs afinado con los otros circuitos en validación. Cada circuito queda en validación
-exactamente una vez:
-
-| pliegue | validación | congelado (`top5`) | afinado (`top5`) | Δ |
-|---|---|---|---|---|
-| f1 | `lighthouse`, `volcano_island` | 0.491 ± 0.011 (12) | 0.564 ± 0.021 (4) | +0.073 |
-| f2 | `gran_paradiso_island`, `hacienda` | 0.584 ± 0.010 (2) | 0.596 ± 0.017 (2) | +0.012 |
-| f3 | `abyss`, `olivermath` | 0.462 ± 0.036 (2) | 0.487 ± 0.032 (2) | +0.025 |
-| **media** | | | | **+0.037** |
+Cada par de circuitos pasa una vez a validación, y en cada caso se compara el encoder
+congelado con el afinado entero.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/validacion-cruzada-dark.png">
-  <img src="docs/figuras/validacion-cruzada-light.png" alt="top5 congelado frente a afinado en los tres pliegues">
+  <img src="docs/figuras/validacion-cruzada-light.png" alt="Mejora de mIoU al afinar el encoder en cada pliegue">
 </picture>
 
-Afinar el encoder mejora **en los tres pliegues**, pero el +0.073 del primero estaba inflado
-por haber elegido en él. La mejora esperada es **+0.037**. Con solo tres pliegues la
-dirección es consistente pero no estadísticamente concluyente.
+| pliegue | circuitos de validación | congelado | afinado | mejora |
+|---|---|---|---|---|
+| f1 | `lighthouse`, `volcano_island` | 0.491 | 0.564 | +0.073 |
+| f2 | `gran_paradiso_island`, `hacienda` | 0.584 | 0.596 | +0.012 |
+| f3 | `abyss`, `olivermath` | 0.462 | 0.487 | +0.025 |
+| **media** | | | | **+0.037** |
+
+La configuración se eligió con f1, por eso su mejora es la más alta; la media de los tres
+pliegues, **+0.037**, es la estimación realista.
 
 ### Entrenamiento vs validación
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/entrenamiento-validacion-dark.png">
-  <img src="docs/figuras/entrenamiento-validacion-light.png" alt="Pérdida de entrenamiento y de validación por pliegue">
+  <img src="docs/figuras/entrenamiento-validacion-light.png" alt="Pérdida de entrenamiento y de validación del modelo final">
 </picture>
 
-Con 213 M de parámetros y 1000 imágenes la pregunta obligada es si hay sobreajuste. La
-respuesta depende de qué se mire:
-
-- **Por pérdida, sí.** La de entrenamiento baja en todas las épocas, pero la de validación toca
-  su mínimo entre las épocas 1 y 5 y después se estanca o sube, con el encoder congelado y con el
-  afinado. Afinar abre más la brecha: en la época elegida, la de validación es 8–22 veces la de
-  entrenamiento, frente a 5–10 veces con el encoder congelado. Aun así, el afinado acaba con menos
-  pérdida de validación que el congelado en f1 y f3 (0.28 frente a 0.51, 0.67 frente a 0.75) y
-  con algo más en f2 (0.53 frente a 0.49).
-- **Por mIoU, no.** El mIoU de validación sigue subiendo mientras la pérdida sube, hasta la
-  época 16–27 de media. El modelo se vuelve demasiado seguro en los píxeles que falla, que es
-  lo que la CrossEntropy castiga, pero acierta más píxeles. Por eso se elige por mIoU de
-  validación y no por pérdida.
-- **La validación son circuitos enteros que no se usaron para entrenar**, y la mejora se
-  repite en los tres pliegues.
-
-**Sobre la fiabilidad.** Entre corridas idénticas —12 réplicas del congelado— la σ del `top5`
-es **0.011**; entre épocas consecutivas de una misma corrida, **0.020**. Por eso las
-decisiones se tomaron con medias sobre varias corridas y no con el ranking individual.
+La pérdida de entrenamiento sigue bajando y la de validación se estanca desde la época 3.
+El mIoU de validación, en cambio, sigue subiendo hasta la época 15, que es la que se guarda:
+el modelo se vuelve más confiado en los píxeles que falla, que es lo que la CrossEntropy
+penaliza, pero acierta más píxeles.
 
 ---
 
 ## Limitaciones
 
-- **`projectile` aparece en 2 frames de los 1500**: uno en entrenamiento y uno en validación.
-  Su IoU de 0.41 se mide sobre ese único frame y es ruido, no una capacidad demostrada.
-  `bomb` aparece en 168 frames de entrenamiento y es la clase más baja, pero no por
-  sub-detección: el 48.7% de sus píxeles se clasifica como `pickup`.
-- **Afinar 213 M de parámetros con 1000 imágenes está al límite.** La brecha entre la
-  pérdida de entrenamiento y la de validación crece al afinar, y en f2 el modelo afinado
-  acaba con más pérdida de validación que el congelado (0.534 frente a 0.490) aunque su
-  mIoU sea mayor.
+- **`projectile` aparece en 2 frames de los 1500**, uno en entrenamiento y uno en
+  validación. Su IoU de 0.41 se mide sobre ese único frame y es ruido.
+- **`bomb` es la clase más baja** (0.218): el 48.7% de sus píxeles se predice como `pickup`.
+- **213 M de parámetros afinados con 1000 imágenes.** La pérdida de validación se estanca
+  pronto y la mejora frente al encoder congelado va de +0.012 a +0.073 según los circuitos.
 - **No hay conjunto de test independiente.** Todas las cifras son de validación; la
   validación cruzada lo mitiga pero no lo sustituye.
 
@@ -290,21 +222,21 @@ La máscara se lee sin conversión de color y se redimensiona con **NEAREST**: u
 `ToTensor()` la dividiría entre 255 y destruiría la codificación de clases, e interpolarla
 inventaría clases inexistentes en los bordes.
 
-```
-train.ipynb           ENTREGABLE — métricas e imágenes segmentadas
-utils.py              ENTREGABLE — dataset, métricas, pesos de clase
-model.th              ENTREGABLE — modelo entrenado (861 MB, en Releases)
-models.py             encoder de SAM 2 + cabeza FPN, save_model / load_model
-train.py              loop de entrenamiento, --resume, descongelado, --val-tracks
-predict.py            inferencia sobre imagen o carpeta; descarga el modelo si falta
-demo.ipynb            notebook de Colab, sin instalación
-class_weights.json    conteo de píxeles del conjunto de entrenamiento
-ejemplos/             imágenes para probar sin descargar el dataset
-experimentos/         barrido multi-GPU, validación cruzada y las 113 corridas
-servidor/             orquestación del entrenamiento en el DGX
-docs/                 figuras del README y el script que las regenera
-```
+### Estructura
 
-Entrenado en un DGX H200 dentro de contenedor Docker (torch 2.13, CUDA); el `.th`
-verificado en macOS con torch 2.14 sobre CPU, cargando sin conexión. Depende de `torch`,
-`torchvision`, `numpy`, `Pillow` y `sam2`.
+- `models.py` — encoder de SAM 2 y cabeza FPN; `save_model` y `load_model`.
+- `utils.py` — dataset, métricas y pesos de clase.
+- `train.py` — entrenamiento, con `--resume`, descongelado del encoder y `--val-tracks`.
+- `predict.py` — inferencia sobre una imagen o una carpeta; descarga el modelo si falta.
+- `train.ipynb` — entrenamiento, métricas e imágenes segmentadas.
+- `demo.ipynb` — demo en Colab.
+- `model.th` — modelo entrenado, 861 MB, en *Releases*.
+- `class_weights.json` — conteo de píxeles por clase del conjunto de entrenamiento.
+- `ejemplos/` — imágenes para probar sin descargar el dataset.
+- `experimentos/` — barrido multi-GPU, validación cruzada y resultados de las 113 corridas.
+- `servidor/` — scripts para entrenar en un servidor GPU remoto con Docker; el host se
+  indica con `STK_SERVER=usuario@host`.
+- `docs/` — figuras del README y el script que las genera.
+
+Entrenado en GPUs NVIDIA H200 con Docker (torch 2.13, CUDA). Probado en macOS con torch 2.14
+sobre CPU. Depende de `torch`, `torchvision`, `numpy`, `Pillow` y `sam2`.

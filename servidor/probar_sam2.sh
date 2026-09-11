@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Se ejecuta EN LOCAL:  bash servidor/probar_sam2.sh
-# Comprueba dentro del contenedor del DGX que sam2 instala, que el checkpoint
+# Se ejecuta EN LOCAL:  STK_SERVER=usuario@host bash servidor/probar_sam2.sh
+# Comprueba dentro del contenedor del servidor que sam2 instala, que el checkpoint
 # descarga y que el encoder produce las shapes esperadas. Solo prueba, no entrena.
 set -euo pipefail
 
-SERVER=fsotoj@172.28.230.10
-REMOTE=/home/fsotoj/sam2_stk
+SERVER="${STK_SERVER:?define STK_SERVER=usuario@host}"
+REMOTE="${STK_REMOTE:-$(ssh "$SERVER" 'echo "$HOME/sam2_stk"')}"
 
 ssh "$SERVER" "mkdir -p '$REMOTE'"
 ssh "$SERVER" 'bash -s' <<REMOTESH

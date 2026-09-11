@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Se ejecuta EN LOCAL:  bash servidor/estado.sh
+# Se ejecuta EN LOCAL:  STK_SERVER=usuario@host bash servidor/estado.sh
 set -euo pipefail
-ssh fsotoj@172.28.230.10 'bash -s' <<'REMOTE'
-P=/home/fsotoj/sam2_stk
+ssh "${STK_SERVER:?define STK_SERVER=usuario@host}" "P='${STK_REMOTE:-}' bash -s" <<'REMOTE'
+P="${P:-$HOME/sam2_stk}"
 echo "== contenedor =="
 docker ps -a --filter name=sam2stk --format '  {{.Names}}  {{.Status}}  (exit {{.State}})' 2>/dev/null || echo "  (ninguno)"
 

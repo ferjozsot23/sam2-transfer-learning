@@ -4,7 +4,7 @@ SAM 2 no es un segmentador semantico: es promptable y binario. Aqui se usa solo
 su image encoder (Hiera + cuello FPN) como extractor de features, se descartan la
 memory attention y el mask decoder original, y se anade una cabeza nueva que
 fusiona los tres niveles del FPN y produce 7 logits por pixel. El encoder puede
-quedar congelado o descongelarse por bloques; el modelo entregado lo afina entero.
+quedar congelado o descongelarse por bloques; el modelo publicado lo afina entero.
 
 El encoder devuelve backbone_fpn con 3 niveles de 256 canales a strides 4, 8 y 16,
 y acepta entradas multiplo de 64. El forward reescala internamente al tamano de

@@ -34,6 +34,8 @@ IOU = [('background', 0.8791, 0.7768), ('track', 0.8743, 0.7365),
        ('nitro', 0.4562, 0.5352), ('bomb', 0.2180, 0.0194),
        ('projectile', 0.4124, 0.0000)]
 
+MODELO_FINAL = 'large_s448_d256_lr0.001_p0.30_b48_el1e-05_r4'
+
 FRAMES = {'background': 1000, 'track': 1000, 'kart': 1000, 'pickup': 433,
           'nitro': 394, 'bomb': 168, 'projectile': 1}
 
@@ -188,108 +190,71 @@ def fig_validacion_cruzada(modo):
     t = TH[modo]
     filas = [r for r in csv.DictReader(open('experimentos/resultados/configuraciones.csv'))
              if r['backbone'] == 'large' and r['lote'] in ('20260909_204201', '20260910_095607')]
-    pliegues = [('f1', 'f1 · donde se eligió', 'lighthouse · volcano_island'),
-                ('f2', 'f2', 'gran_paradiso_island · hacienda'),
-                ('f3', 'f3', 'abyss · olivermath')]
-    rng = np.random.default_rng(0)
-    fig, ax = plt.subplots(figsize=(9.0, 5.0))
-    deltas = []
-    for i, (p, _, _) in enumerate(pliegues):
+    pliegues = [('f1', 'lighthouse\nvolcano_island'),
+                ('f2', 'gran_paradiso_island\nhacienda'),
+                ('f3', 'abyss\nolivermath')]
+    mejoras = []
+    for p, _ in pliegues:
         base = [float(r['top5']) for r in filas if r['pliegue'] == p and r['modo'] == 'none']
         afin = [float(r['top5']) for r in filas if r['pliegue'] == p and r['modo'] == 'b48'
                 and r['encoder_lr'] == '1e-05']
-        for v, dx, color in [(base, -0.18, t['ink3']), (afin, 0.18, t['serie'])]:
-            ax.scatter(i + dx + rng.uniform(-0.05, 0.05, len(v)), v, s=38, color=color,
-                       alpha=0.6, lw=0, zorder=3)
-            ax.plot([i + dx - 0.13, i + dx + 0.13], [st.mean(v)] * 2, color=color, lw=3,
-                    solid_capstyle='round', zorder=4)
-        deltas.append(st.mean(afin) - st.mean(base))
-        ax.text(i, max(base + afin) + 0.014, '%+.3f' % deltas[-1], ha='center',
-                color=t['ink'], fontsize=11, fontweight='medium')
-    ax.set_xticks(range(len(pliegues)))
-    ax.set_xticklabels(['%s\n%s' % (a, b) for _, a, b in pliegues], color=t['ink'], fontsize=9.5)
-    ax.set_xlim(-0.6, len(pliegues) - 0.4)
-    ax.set_ylim(0.42, 0.65)
-    ax.set_ylabel('mIoU de validación (top5)', color=t['ink2'], fontsize=9.5)
-    ax.yaxis.grid(True, color=t['grid'], lw=1, zorder=0)
-    ax.set_axisbelow(True)
+        mejoras.append(st.mean(afin) - st.mean(base))
+    media = st.mean(mejoras)
+
+    x = np.arange(len(pliegues))
+    fig, ax = plt.subplots(figsize=(8.0, 4.6))
+    ax.bar(x, mejoras, width=0.55, color=t['serie'], zorder=3)
+    for xi, m in zip(x, mejoras):
+        ax.text(xi, m + 0.0015, '+%.3f' % m, ha='center', va='bottom', color=t['ink'], fontsize=11)
+    ax.axhline(0, color=t['ink3'], lw=1, zorder=4)
+    ax.axhline(media, color=t['ink2'], lw=1.2, ls=(0, (4, 3)), zorder=4)
+    ax.text(x[-1] + 0.9, media + max(mejoras) * 0.015, 'media +%.3f' % media, ha='right',
+            va='bottom', color=t['ink2'], fontsize=10)
+    ax.set_xticks(x)
+    ax.set_xticklabels(['%s\n%s' % (p, c) for p, c in pliegues], color=t['ink'], fontsize=9.5)
+    ax.set_xlim(-0.5, x[-1] + 0.95)
+    ax.set_ylim(0, max(mejoras) * 1.22)
+    ax.set_yticks([])
     estilo(fig, ax, t)
     ax.tick_params(axis='x', labelcolor=t['ink'])
-    marca = lambda c: plt.Line2D([], [], color=c, lw=3, marker='o', ms=6, mec=c)
-    leg = ax.legend([marca(t['ink3']), marca(t['serie'])],
-                    ['encoder congelado', 'encoder afinado entero · elr 1e-5'],
-                    loc='upper center', bbox_to_anchor=(0.5, -0.17), ncol=2,
-                    frameon=False, fontsize=9.5)
-    for txt in leg.get_texts():
-        txt.set_color(t['ink2'])
-    fig.suptitle('Validación cruzada: la mejora se mantiene en los 3 pliegues, pero es menor',
+    fig.suptitle('Afinar el encoder mejora el mIoU en los 3 pliegues',
                  color=t['ink'], fontsize=12.5, x=0.012, ha='left', y=0.975)
-    fig.text(0.012, 0.905, 'cada punto es una corrida · línea: media · mejora media %+.3f'
-             % (sum(deltas) / len(deltas)), color=t['ink2'], fontsize=9.5, ha='left')
-    fig.tight_layout(rect=[0, 0.05, 1, 0.87])
+    fig.text(0.012, 0.9, 'mejora frente al encoder congelado, según los circuitos de validación',
+             color=t['ink2'], fontsize=9.5, ha='left')
+    fig.tight_layout(rect=[0, 0, 1, 0.86])
     fig.savefig('docs/figuras/validacion-cruzada-%s.png' % modo, dpi=170, facecolor=t['surface'])
     plt.close(fig)
 
 
 def fig_entrenamiento_validacion(modo):
     t = TH[modo]
-    curvas = {}
-    for r in csv.DictReader(open('experimentos/resultados/epocas.csv')):
-        if r['lote'] not in ('20260909_204201', '20260910_095607') or not r['val_loss']:
-            continue
-        n = r['notes']
-        if '_b48_el1e-05_' in n:
-            m = 'afinado'
-        elif '_none_' in n:
-            m = 'congelado'
-        else:
-            continue
-        p = n[-2:] if n.endswith(('_f2', '_f3')) else 'f1'
-        curvas.setdefault((p, m), {}).setdefault(n, []).append(
-            (int(r['epoch']), float(r['train_loss']), float(r['val_loss'])))
+    filas = sorted((int(r['epoch']), float(r['train_loss']), float(r['val_loss']), float(r['val_miou']))
+                   for r in csv.DictReader(open('experimentos/resultados/epocas.csv'))
+                   if r['lote'] == '20260909_204201' and r['notes'] == MODELO_FINAL)
+    ep, tr, va, mi = map(list, zip(*filas))
+    mejor = mi.index(max(mi))
 
-    pliegues = [('f1', 'f1 · lighthouse · volcano_island'),
-                ('f2', 'f2 · gran_paradiso_island · hacienda'),
-                ('f3', 'f3 · abyss · olivermath')]
-    fig, axes = plt.subplots(1, 3, figsize=(12.0, 4.6), sharey=True)
-    tope = 0.0
-    for ax, (p, titulo) in zip(axes, pliegues):
-        for m, color in [('congelado', t['ink3']), ('afinado', t['serie'])]:
-            corridas = [sorted(v) for v in curvas[(p, m)].values()]
-            minimo = max(2, len(corridas) // 2)
-            ep, tr, va = [], [], []
-            e = 0
-            while sum(len(c) > e for c in corridas) >= minimo:
-                vivas = [c[e] for c in corridas if len(c) > e]
-                ep.append(e)
-                tr.append(sum(x[1] for x in vivas) / len(vivas))
-                va.append(sum(x[2] for x in vivas) / len(vivas))
-                e += 1
-            tope = max(tope, max(va), max(tr))
-            ax.plot(ep, va, color=color, lw=2.2, zorder=3)
-            ax.plot(ep, tr, color=color, lw=1.6, ls=(0, (4, 2.5)), zorder=3)
-        ax.set_title(titulo, color=t['ink'], fontsize=10, loc='left')
-        ax.set_xlabel('época', color=t['ink2'], fontsize=9.5)
-        ax.yaxis.grid(True, color=t['grid'], lw=1, zorder=0)
-        ax.set_axisbelow(True)
-    axes[0].set_ylim(0, tope * 1.06)
-    axes[0].set_ylabel('CrossEntropy ponderada', color=t['ink2'], fontsize=9.5)
-    estilo(fig, axes, t)
-    linea = lambda c, ls: plt.Line2D([], [], color=c, lw=2, ls=ls)
-    leg = fig.legend([linea(t['ink3'], '-'), linea(t['serie'], '-'),
-                      linea(t['ink2'], '-'), linea(t['ink2'], (0, (4, 2.5)))],
-                     ['encoder congelado', 'encoder afinado entero · elr 1e-5',
-                      'validación', 'entrenamiento'],
-                     loc='lower center', ncol=4, frameon=False, fontsize=9.5,
-                     bbox_to_anchor=(0.5, 0.0))
-    for txt in leg.get_texts():
-        txt.set_color(t['ink2'])
-    fig.suptitle('Entrenamiento vs validación: la pérdida de validación deja de bajar en las primeras épocas',
-                 color=t['ink'], fontsize=12.5, x=0.008, ha='left', y=0.975)
-    fig.text(0.008, 0.895, 'media por época de las corridas de cada pliegue · '
-             'el modelo se elige por mIoU de validación, no por pérdida',
+    fig, ax = plt.subplots(figsize=(8.6, 4.6))
+    ax.plot(ep, tr, color=t['serie'], lw=2.2, zorder=3)
+    ax.plot(ep, va, color=t['serie2'], lw=2.2, zorder=3)
+    ax.text(ep[-1] + 0.4, tr[-1], 'entrenamiento', color=t['serie'], va='center', fontsize=10)
+    ax.text(ep[-1] + 0.4, va[-1], 'validación', color=t['serie2'], va='center', fontsize=10)
+    ax.axvline(ep[mejor], color=t['ink3'], lw=1, ls=(0, (4, 3)), zorder=2)
+    ax.text(ep[mejor] + 0.3, max(va), 'época guardada\nmejor mIoU de validación: %.3f' % mi[mejor],
+            color=t['ink2'], fontsize=9.5, va='top')
+    ax.set_xlim(-0.5, ep[-1] + 4.8)
+    ax.set_ylim(0, max(va) * 1.05)
+    ax.set_xlabel('época', color=t['ink2'], fontsize=9.5)
+    ax.set_ylabel('pérdida', color=t['ink2'], fontsize=9.5)
+    ax.yaxis.grid(True, color=t['grid'], lw=1, zorder=0)
+    ax.set_axisbelow(True)
+    estilo(fig, ax, t)
+    fig.suptitle('Entrenamiento vs validación del modelo final',
+                 color=t['ink'], fontsize=12.5, x=0.012, ha='left', y=0.975)
+    fig.text(0.012, 0.9, 'la pérdida de validación se estanca desde la época %d, pero el mIoU sigue '
+             'subiendo hasta la %d' % (ep[va.index(min(va))], ep[mejor]),
              color=t['ink2'], fontsize=9.5, ha='left')
-    fig.tight_layout(rect=[0, 0.07, 1, 0.87])
+    fig.tight_layout(rect=[0, 0, 1, 0.86])
     fig.savefig('docs/figuras/entrenamiento-validacion-%s.png' % modo, dpi=170,
                 facecolor=t['surface'])
     plt.close(fig)

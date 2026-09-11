@@ -3,8 +3,8 @@
 Vive en un modulo aparte para que el notebook lo importe y lo ejecute, y para
 que el servidor pueda lanzarlo como script sin depender de un kernel de Jupyter.
 
-Guarda checkpoint cada epoca y soporta --resume: el DGX es una maquina
-compartida y las corridas se pueden cortar.
+Guarda checkpoint cada epoca y soporta --resume, para retomar corridas
+interrumpidas en un servidor compartido.
 """
 
 import argparse

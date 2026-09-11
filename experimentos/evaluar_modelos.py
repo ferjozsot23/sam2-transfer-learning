@@ -2,7 +2,7 @@
 
 No se fia de lo que digan los csv del barrido: vuelve a calcular la matriz de
 confusion sobre los 500 frames de validacion. Es la comprobacion que decide que
-modelo se entrega.
+modelo se publica.
 
     python experimentos/evaluar_modelos.py salidas/barrido_*/model_large*.th
 """
