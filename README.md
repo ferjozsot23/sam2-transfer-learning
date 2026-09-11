@@ -140,8 +140,8 @@ corridas sueltas.
 ### Cuánto descongelar el encoder
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/descongelado-dark.png">
-  <img src="docs/figuras/descongelado-light.png" alt="mIoU según cuánto encoder se descongela y a qué learning rate">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/descongelado-encoder-dark.png">
+  <img src="docs/figuras/descongelado-encoder-light.png" alt="mIoU según cuánto encoder se descongela y a qué learning rate">
 </picture>
 
 | descongelado | parámetros del encoder | `elr` 1e-4 | `elr` 1e-5 | `elr` 1e-6 |

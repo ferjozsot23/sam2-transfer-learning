@@ -177,7 +177,7 @@ def fig_descongelado(modo):
     fig.text(0.012, 0.905, 'media ± desviación de 4 repeticiones por punto · banda gris: encoder congelado',
              color=t['ink2'], fontsize=9.5, ha='left')
     fig.tight_layout(rect=[0, 0.05, 1, 0.87])
-    fig.savefig('docs/figuras/descongelado-%s.png' % modo, dpi=170, facecolor=t['surface'])
+    fig.savefig('docs/figuras/descongelado-encoder-%s.png' % modo, dpi=170, facecolor=t['surface'])
     plt.close(fig)
 
 
