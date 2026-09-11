@@ -35,7 +35,6 @@ IOU = [('background', 0.8791, 0.7768), ('track', 0.8743, 0.7365),
        ('projectile', 0.4124, 0.0000)]
 
 MODELO_FINAL = 'large_s448_d256_lr0.001_p0.30_b48_el1e-05_r4'
-MIOU_FINAL = 0.6008
 
 FRAMES = {'background': 1000, 'track': 1000, 'kart': 1000, 'pickup': 433,
           'nitro': 394, 'bomb': 168, 'projectile': 1}
@@ -159,16 +158,12 @@ def fig_descongelado(modo):
                 mew=2, zorder=3, label='encoder-lr %s' % etiqueta)
         ax.text(x[-1] + 0.3, med[-1], etiqueta, color=t['ink'], fontsize=9.5, va='center')
         finales[el] = med[-1]
-    ax.scatter([x[-1]], [MIOU_FINAL], marker='*', s=300, color=t['serie2'], edgecolor=t['ink'],
-               linewidth=0.8, zorder=5)
-    ax.text(x[-1] - 0.16, MIOU_FINAL, 'modelo final · %.4f' % MIOU_FINAL, color=t['ink'],
-            fontsize=10.5, ha='right', va='center', fontweight='medium')
 
     ax.set_xticks(x)
     ax.set_xticklabels(['%s\n%s' % (n, pc) for _, n, pc in orden], color=t['ink'], fontsize=9.5)
     ax.set_xlim(-0.5, len(orden) - 0.4)
     ax.set_ylim(0.42, 0.63)
-    ax.set_ylabel('mIoU de validación', color=t['ink2'], fontsize=9.5)
+    ax.set_ylabel('mIoU de validación (top5)', color=t['ink2'], fontsize=9.5)
     ax.yaxis.grid(True, color=t['grid'], lw=1, zorder=0)
     ax.set_axisbelow(True)
     estilo(fig, ax, t)
@@ -179,8 +174,7 @@ def fig_descongelado(modo):
         txt.set_color(t['ink2'])
     fig.suptitle('Descongelar el encoder solo compensa si es entero y despacio',
                  color=t['ink'], fontsize=12.5, x=0.012, ha='left', y=0.975)
-    fig.text(0.012, 0.905, 'puntos: top5 medio de 4 repeticiones ± desviación · banda gris: encoder congelado · '
-             '★ modelo final, su mejor época',
+    fig.text(0.012, 0.905, 'media ± desviación de 4 repeticiones por punto · banda gris: encoder congelado',
              color=t['ink2'], fontsize=9.5, ha='left')
     fig.tight_layout(rect=[0, 0.05, 1, 0.87])
     fig.savefig('docs/figuras/descongelado-%s.png' % modo, dpi=170, facecolor=t['surface'])
