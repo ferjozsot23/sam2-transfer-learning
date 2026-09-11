@@ -4,37 +4,13 @@ Transfer learning desde **Segment Anything Model 2** para clasificar cada píxel
 frame del videojuego en una de 7 clases: `background`, `track`, `kart`, `pickup`,
 `nitro`, `bomb`, `projectile`.
 
-**mIoU 0.6008** en dos circuitos que no se usaron para entrenar.
+**mIoU 0.6008** en dos circuitos que no se usaron para entrenar (mejor de 4 repeticiones;
+media 0.571).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/cualitativo-dark.png">
   <img src="docs/figuras/cualitativo-light.png" alt="Predicciones sobre circuitos de validación">
 </picture>
-
----
-
-## Enfoque
-
-SAM 2 **no es un segmentador semántico**. Es *promptable* y *binario*: recibe una imagen
-más un prompt —un punto, una caja— y devuelve la máscara del objeto señalado. No sabe qué
-es un kart ni distingue siete clases.
-
-Lo que sí tiene es un **image encoder** entrenado sobre millones de máscaras. El modelo:
-
-1. Reutiliza ese encoder, con sus pesos preentrenados, como extractor de features.
-2. Descarta la *memory attention* (es para vídeo) y el *mask decoder* original (es binario).
-3. Añade una **cabeza nueva** que fusiona los tres niveles del FPN y produce 7 logits por píxel.
-4. **Afina el encoder entero** con un learning rate cien veces menor que el de la cabeza.
-
-## Arquitectura
-
-- **Encoder**: SAM 2.1 Hiera-Large, pesos preentrenados, afinado entero con `lr` 1e-5
-  (212.7 M parámetros).
-- **Features**: `backbone_fpn`, 3 niveles de 256 canales a strides 4, 8 y 16.
-- **Cabeza**: FPN de grueso a fino con `lr` 1e-3 (2.56 M parámetros), terminada en una
-  convolución 1×1 a 7 logits por píxel, sin softmax.
-- **Entrada y salida**: el `forward` normaliza, reescala a 448×448 y devuelve los logits al
-  tamaño original de la imagen, así que acepta cualquier resolución.
 
 ---
 
@@ -75,6 +51,63 @@ solos. Incluye el encoder afinado completo, así que carga sin conexión.
 
 ---
 
+## Método
+
+SAM 2 **no es un segmentador semántico**. Es *promptable* y *binario*: recibe una imagen
+más un prompt —un punto, una caja— y devuelve la máscara del objeto señalado. Lo que se
+aprovecha es su **image encoder**, entrenado sobre millones de máscaras:
+
+1. Se usa el encoder de SAM 2.1 Hiera-Large (212.7 M parámetros) con sus pesos
+   preentrenados. Su salida `backbone_fpn` son 3 mapas de 256 canales a strides 4, 8 y 16.
+2. Se descartan la *memory attention* (es para vídeo) y el *mask decoder* original (es binario).
+3. Una **cabeza FPN nueva** (2.56 M parámetros) fusiona los tres niveles y produce 7 logits
+   por píxel.
+4. Se **afina el encoder entero** con un learning rate cien veces menor que el de la cabeza.
+
+El `forward` normaliza, reescala a 448×448 y devuelve los logits al tamaño original de la
+imagen, así que acepta cualquier resolución.
+
+| entrenamiento | |
+|---|---|
+| pérdida | CrossEntropy ponderada por clase |
+| optimizador | AdamW, weight decay 1e-4 |
+| learning rate | cabeza 1e-3 · encoder 1e-5 |
+| scheduler | ReduceLROnPlateau sobre el mIoU: ×0.5 tras 4 épocas sin mejorar |
+| batch · épocas | 8 · hasta 30, parada temprana tras 8 sin mejorar |
+| aumento de datos | volteo horizontal; brillo, contraste y saturación ×0.7–1.3 |
+| selección | época con mejor mIoU de validación |
+
+---
+
+## Datos
+
+1500 frames de 400×400 capturados en 6 circuitos del juego, 250 por circuito, cada uno con
+su máscara de 7 clases. El split es **por circuito**: los frames de un mismo circuito son
+casi idénticos, así que un split aleatorio pondría frames gemelos a ambos lados y daría un
+mIoU alto y falso.
+
+| | circuitos | frames |
+|---|---|---|
+| entrenamiento | `abyss`, `gran_paradiso_island`, `hacienda`, `olivermath` | 1000 |
+| validación | `lighthouse`, `volcano_island` | 500 |
+
+El desbalance de clases es extremo, por eso la métrica es el IoU por clase y no la accuracy,
+y la pérdida va ponderada:
+
+| clase | % de píxeles | frames con la clase | peso en la pérdida |
+|---|---|---|---|
+| background | 53.56 | 1000 | 0.16 |
+| track | 43.82 | 1000 | 0.17 |
+| kart | 2.44 | 1000 | 0.40 |
+| pickup | 0.12 | 433 | 0.97 |
+| nitro | 0.026 | 394 | 1.56 |
+| bomb | 0.019 | 168 | 1.71 |
+| projectile | 0.010 | 1 | 2.04 |
+
+*Conjunto de entrenamiento. Peso = (1 / frecuencia)^0.30, normalizado a media 1.*
+
+---
+
 ## Resultados
 
 <picture>
@@ -82,32 +115,8 @@ solos. Incluye el encoder afinado completo, así que carga sin conexión.
   <img src="docs/figuras/iou-light.png" alt="IoU por clase, SAM 2 frente a U-Net">
 </picture>
 
-| clase | IoU |
-|---|---|
-| background | 0.8791 |
-| track | 0.8743 |
-| kart | 0.8158 |
-| pickup | 0.5496 |
-| nitro | 0.4562 |
-| bomb | 0.2180 |
-| projectile | 0.4124 |
-| **mIoU** | **0.6008** |
-
-Medido con una matriz de confusión acumulada sobre los 500 frames de validación. Es la
-mejor de 4 repeticiones de la misma configuración; la media de las cuatro es 0.571.
-
-**El split es por circuito, no por frame.** Los frames de un mismo circuito son casi
-idénticos, así que un split aleatorio pondría frames gemelos a ambos lados y daría un mIoU
-alto y falso.
-
-| | circuitos | frames |
-|---|---|---|
-| entrenamiento | `abyss`, `gran_paradiso_island`, `hacienda`, `olivermath` | 1000 |
-| validación | `lighthouse`, `volcano_island` | 500 |
-
-### Referencia: U-Net desde cero
-
-Una U-Net entrenada desde cero con el mismo dataset y el mismo split:
+Medido con una matriz de confusión acumulada sobre los 500 frames de validación. La
+referencia es una U-Net entrenada desde cero con el mismo dataset y el mismo split:
 
 | clase | U-Net | SAM 2 | |
 |---|---|---|---|
@@ -144,20 +153,8 @@ corridas sueltas.
   <img src="docs/figuras/descongelado-encoder-light.png" alt="mIoU según cuánto encoder se descongela y a qué learning rate">
 </picture>
 
-| descongelado | parámetros del encoder | `elr` 1e-4 | `elr` 1e-5 | `elr` 1e-6 |
-|---|---|:---:|:---:|:---:|
-| ninguno | 0 | 0.483 | 0.494 | 0.496 |
-| cuello FPN | 0.55 M · 0.3% | 0.464 | 0.487 | 0.485 |
-| 3 bloques | 48 M · 23% | 0.470 | 0.483 | 0.470 |
-| 15 bloques | 107 M · 50% | 0.500 | 0.509 | 0.505 |
-| 28 bloques | 159 M · 75% | 0.528 | 0.548 | 0.501 |
-| 48 bloques | 213 M · 100% | 0.542 | **0.564** | 0.509 |
-
-*`top5` medio de 4 repeticiones por celda; `elr` es el learning rate del encoder.*
-
-- Descongelar solo el cuello o los últimos bloques queda por debajo del encoder congelado.
-- El encoder entero con `elr` 1e-5 es la mejor combinación: 0.564 frente a 0.491 del congelado.
-- Con `elr` 1e-6 los pesos apenas se mueven y el resultado queda cerca del congelado.
+Descongelar solo el cuello o los últimos bloques empeora; descongelar el encoder entero con
+`encoder-lr` 1e-5 es lo mejor, con un `top5` medio de 0.564 frente a 0.491 del congelado.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/seleccion-dark.png">
@@ -190,9 +187,6 @@ La configuración se eligió con f1, por eso su mejora es la más alta; la media
 pliegues, **+0.037**, es la estimación realista.
 
 ### Entrenamiento vs validación
-
-Curvas del modelo final: entrenado con `abyss`, `gran_paradiso_island`, `hacienda` y
-`olivermath`, y validado en `lighthouse` y `volcano_island` (pliegue f1).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/entrenamiento-validacion-dark.png">
@@ -227,35 +221,31 @@ penaliza, pero acierta más píxeles.
 ## Reproducir
 
 ```bash
+pip install -r requirements.txt
 python train.py --data-root data --backbone large --size 448 --dim 256 \
     --lr 1e-3 --weight-power 0.30 --unfreeze-blocks 48 --unfreeze-neck \
     --encoder-lr 1e-5 --epochs 30 --early-stop 8 --batch-size 8
-
-python experimentos/sweep.py --data-root data --backbones large --sizes 448 --dims 256 \
-    --modos none b48 --encoder-lrs 1e-5 --repeticiones 2 --pliegues f2 f3 \
-    --epochs 30 --early-stop 8
 ```
 
-El dataset se organiza en `images/` y `masks/`, emparejados por circuito e identificador.
-La máscara se lee sin conversión de color y se redimensiona con **NEAREST**: un
-`ToTensor()` la dividiría entre 255 y destruiría la codificación de clases, e interpolarla
-inventaría clases inexistentes en los bordes.
+`data/` debe contener `images/` y `masks/`, emparejados por circuito e identificador.
 
 ### Estructura
 
 - `models.py` — encoder de SAM 2 y cabeza FPN; `save_model` y `load_model`.
 - `utils.py` — dataset, métricas y pesos de clase.
-- `train.py` — entrenamiento, con `--resume`, descongelado del encoder y `--val-tracks`.
-- `predict.py` — inferencia sobre una imagen o una carpeta; descarga el modelo si falta.
+- `train.py` — entrenamiento.
+- `predict.py` — inferencia sobre una imagen o una carpeta.
 - `train.ipynb` — entrenamiento, métricas e imágenes segmentadas.
 - `demo.ipynb` — demo en Colab.
-- `model.th` — modelo entrenado, 861 MB, en *Releases*.
-- `class_weights.json` — conteo de píxeles por clase del conjunto de entrenamiento.
-- `ejemplos/` — imágenes para probar sin descargar el dataset.
-- `experimentos/` — barrido multi-GPU, validación cruzada y resultados de las 113 corridas.
-- `servidor/` — scripts para entrenar en un servidor GPU remoto con Docker; el host se
-  indica con `STK_SERVER=usuario@host`.
-- `docs/` — figuras del README y el script que las genera.
+- `experimentos/` — barrido multi-GPU y resultados de las 113 corridas.
+- `servidor/` — scripts para entrenar en un servidor GPU remoto con Docker.
 
 Entrenado en GPUs NVIDIA H200 con Docker (torch 2.13, CUDA). Probado en macOS con torch 2.14
 sobre CPU. Depende de `torch`, `torchvision`, `numpy`, `Pillow` y `sam2`.
+
+---
+
+## Referencias
+
+- N. Ravi et al., *SAM 2: Segment Anything in Images and Videos*, arXiv:2408.00714, 2024.
+  El código y los pesos de SAM 2 se distribuyen bajo licencia Apache 2.0.
