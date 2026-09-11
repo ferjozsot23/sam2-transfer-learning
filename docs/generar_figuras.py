@@ -79,11 +79,11 @@ def fig_comparacion(modo):
         txt.set_color(t['ink2'])
     estilo(fig, ax, t)
     ax.tick_params(axis='y', labelcolor=t['ink'])
-    fig.suptitle('IoU por clase — validación en 2 circuitos nunca vistos',
+    fig.suptitle('IoU por clase en validación: SAM 2 vs U-Net',
                  color=t['ink'], fontsize=12.5, x=0.012, ha='left', y=0.975)
-    fig.text(0.012, 0.905, 'mIoU 0.6008 frente a 0.4629 · encoder de SAM 2 afinado entero',
+    fig.text(0.012, 0.905, 'mIoU: SAM 2 0.6008 · U-Net 0.4629',
              color=t['ink2'], fontsize=9.5, ha='left')
-    fig.tight_layout(rect=[0, 0.06, 1, 0.87])
+    fig.tight_layout(rect=[0, 0.06, 0.96, 0.87])
     fig.savefig('docs/figuras/iou-%s.png' % modo, dpi=170, facecolor=t['surface'])
     plt.close(fig)
 
@@ -172,11 +172,11 @@ def fig_descongelado(modo):
                     frameon=False, fontsize=9.5)
     for txt in leg.get_texts():
         txt.set_color(t['ink2'])
-    fig.suptitle('Descongelar el encoder solo compensa si es entero y despacio',
+    fig.suptitle('mIoU por nivel de descongelado del encoder',
                  color=t['ink'], fontsize=12.5, x=0.012, ha='left', y=0.975)
     fig.text(0.012, 0.905, 'media ± desviación de 4 repeticiones por punto · banda gris: encoder congelado',
              color=t['ink2'], fontsize=9.5, ha='left')
-    fig.tight_layout(rect=[0, 0.05, 1, 0.87])
+    fig.tight_layout(rect=[0, 0.05, 0.96, 0.87])
     fig.savefig('docs/figuras/descongelado-encoder-%s.png' % modo, dpi=170, facecolor=t['surface'])
     plt.close(fig)
 
@@ -214,11 +214,11 @@ def fig_validacion_cruzada(modo):
     ax.set_yticks([])
     estilo(fig, ax, t)
     ax.tick_params(axis='x', labelcolor=t['ink'])
-    fig.suptitle('Afinar el encoder mejora el mIoU en los 3 pliegues',
+    fig.suptitle('Validación cruzada: mejora de mIoU al afinar el encoder',
                  color=t['ink'], fontsize=12.5, x=0.012, ha='left', y=0.975)
-    fig.text(0.012, 0.9, 'mejora frente al encoder congelado, según los circuitos de validación',
+    fig.text(0.012, 0.9, 'diferencia de mIoU frente al encoder congelado, por pliegue',
              color=t['ink2'], fontsize=9.5, ha='left')
-    fig.tight_layout(rect=[0, 0, 1, 0.86])
+    fig.tight_layout(rect=[0, 0, 0.96, 0.86])
     fig.savefig('docs/figuras/validacion-cruzada-%s.png' % modo, dpi=170, facecolor=t['surface'])
     plt.close(fig)
 
@@ -246,11 +246,11 @@ def fig_entrenamiento_validacion(modo):
     ax.yaxis.grid(True, color=t['grid'], lw=1, zorder=0)
     ax.set_axisbelow(True)
     estilo(fig, ax, t)
-    fig.suptitle('Pérdida de entrenamiento vs validación',
+    fig.suptitle('Pérdida de entrenamiento y de validación por época',
                  color=t['ink'], fontsize=12.5, x=0.012, ha='left', y=0.975)
-    fig.text(0.012, 0.9, 'la de entrenamiento sigue bajando; la de validación se estanca desde la época %d'
-             % ep[va.index(min(va))], color=t['ink2'], fontsize=9.5, ha='left')
-    fig.tight_layout(rect=[0, 0, 1, 0.86])
+    fig.text(0.012, 0.9, 'modelo final · validación: lighthouse y volcano_island',
+             color=t['ink2'], fontsize=9.5, ha='left')
+    fig.tight_layout(rect=[0, 0, 0.96, 0.86])
     fig.savefig('docs/figuras/entrenamiento-validacion-%s.png' % modo, dpi=170,
                 facecolor=t['surface'])
     plt.close(fig)
@@ -275,11 +275,11 @@ def fig_miou_validacion(modo):
     ax.yaxis.grid(True, color=t['grid'], lw=1, zorder=0)
     ax.set_axisbelow(True)
     estilo(fig, ax, t)
-    fig.suptitle('mIoU de validación del modelo final',
+    fig.suptitle('mIoU de validación por época',
                  color=t['ink'], fontsize=12.5, x=0.012, ha='left', y=0.975)
-    fig.text(0.012, 0.9, 'sube hasta la época %d, que es la que se guarda' % ep[mejor],
+    fig.text(0.012, 0.9, 'modelo final · validación: lighthouse y volcano_island · línea punteada: época guardada',
              color=t['ink2'], fontsize=9.5, ha='left')
-    fig.tight_layout(rect=[0, 0, 1, 0.86])
+    fig.tight_layout(rect=[0, 0, 0.96, 0.86])
     fig.savefig('docs/figuras/miou-validacion-%s.png' % modo, dpi=170, facecolor=t['surface'])
     plt.close(fig)
 
@@ -340,12 +340,12 @@ def fig_seleccion(modo):
     barra.ax.tick_params(colors=t['ink2'], labelsize=9, length=0)
     barra.set_label('mejor mIoU de validación de cada corrida', color=t['ink2'], fontsize=9.5)
 
-    fig.suptitle('Cómo se eligió el modelo final',
+    fig.suptitle('mIoU de las 72 corridas de descongelado',
                  color=t['ink'], fontsize=12.5, x=0.012, ha='left', y=0.975)
-    fig.text(0.012, 0.915, '72 corridas: 6 niveles de descongelado × 3 learning rates del encoder × 4 '
-             'repeticiones\nprimero la combinación con mejor media; dentro de ella, la mejor repetición',
+    fig.text(0.012, 0.915, '6 niveles de descongelado × 3 learning rates del encoder × 4 repeticiones\n'
+             'recuadro: combinación con mejor media y su mejor repetición',
              color=t['ink2'], fontsize=9.5, ha='left', va='top', linespacing=1.5)
-    fig.subplots_adjust(left=0.2, right=0.97, top=0.8, bottom=0.1)
+    fig.subplots_adjust(left=0.2, right=0.91, top=0.8, bottom=0.1)
     fig.savefig('docs/figuras/seleccion-%s.png' % modo, dpi=170, facecolor=t['surface'])
     plt.close(fig)
 
