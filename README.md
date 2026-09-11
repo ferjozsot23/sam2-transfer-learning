@@ -159,6 +159,16 @@ corridas sueltas.
 - El encoder entero con `elr` 1e-5 es la mejor combinación: 0.564 frente a 0.491 del congelado.
 - Con `elr` 1e-6 los pesos apenas se mueven y el resultado queda cerca del congelado.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/seleccion-dark.png">
+  <img src="docs/figuras/seleccion-light.png" alt="Las 72 corridas y cuál es el modelo final">
+</picture>
+
+Cada combinación se entrenó 4 veces con la misma configuración (r1–r4); entre ellas solo
+cambian la inicialización de la cabeza, el orden de las imágenes y el aumento de datos. Se
+eligió la combinación con mejor media y, dentro de ella, la mejor repetición: la r4, guardada
+en su época 15, es el modelo final.
+
 ### Validación cruzada
 
 Cada par de circuitos pasa una vez a validación, y en cada caso se compara el encoder

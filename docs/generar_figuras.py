@@ -287,6 +287,72 @@ def fig_miou_validacion(modo):
     plt.close(fig)
 
 
+def fig_seleccion(modo):
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import LinearSegmentedColormap, Normalize
+    from matplotlib.patches import Rectangle
+
+    t = TH[modo]
+    filas = [r for r in csv.DictReader(open('experimentos/resultados/configuraciones.csv'))
+             if r['lote'] == '20260909_204201']
+    niveles = [('none', 'ninguno', '0%'), ('neck', 'cuello FPN', '0.3%'),
+               ('b3', '3 bloques', '23%'), ('b15', '15 bloques', '50%'),
+               ('b28', '28 bloques', '75%'), ('b48', '48 bloques', '100%')]
+    elrs = [('0.0001', '1e-4'), ('1e-05', '1e-5'), ('1e-06', '1e-6')]
+    valor = {(r['modo'], r['encoder_lr'], int(r['rep'])): float(r['best_miou']) for r in filas}
+    rampa = ['#e3edf9', '#1d5bab'] if modo == 'light' else ['#24313f', '#8cc0f5']
+    cmap = LinearSegmentedColormap.from_list('rampa', rampa)
+    norm = Normalize(min(valor.values()), max(valor.values()))
+    lado, hueco = 0.2, 0.04
+    x0 = (1 - (4 * lado + 3 * hueco)) / 2
+
+    fig, ax = plt.subplots(figsize=(8.6, 6.8))
+    for i, (mo, _, _) in enumerate(niveles):
+        y = len(niveles) - 1 - i
+        for j, (el, _) in enumerate(elrs):
+            for rep in range(1, 5):
+                x = j + x0 + (rep - 1) * (lado + hueco)
+                ax.add_patch(Rectangle((x, y + 0.2), lado, 0.6, color=cmap(norm(valor[(mo, el, rep)])),
+                                       lw=0, zorder=2))
+    for rep in range(1, 5):
+        for j in range(len(elrs)):
+            ax.text(j + x0 + (rep - 1) * (lado + hueco) + lado / 2, len(niveles) - 0.12, 'r%d' % rep,
+                    ha='center', va='bottom', color=t['ink3'], fontsize=8)
+
+    jg, yg = 1, 0
+    xg = jg + x0 + 3 * (lado + hueco)
+    ax.add_patch(Rectangle((jg + x0 - 0.04, yg + 0.12), 4 * lado + 3 * hueco + 0.08, 0.76,
+                           fill=False, ec=t['ink2'], lw=1.2, zorder=3))
+    ax.add_patch(Rectangle((xg, yg + 0.2), lado, 0.6, fill=False, ec=t['ink'], lw=2.4, zorder=4))
+    ax.text(xg + lado / 2, yg - 0.04, 'modelo final · mIoU %.3f' % valor[('b48', '1e-05', 4)],
+            ha='center', va='top', color=t['ink'], fontsize=10.5, fontweight='medium')
+
+    ax.set_xlim(0, len(elrs))
+    ax.set_ylim(-0.5, len(niveles) + 0.25)
+    ax.set_yticks([len(niveles) - 1 - i + 0.5 for i in range(len(niveles))])
+    ax.set_yticklabels(['%s · %s' % (n, pc) for _, n, pc in niveles], color=t['ink'], fontsize=10)
+    ax.set_xticks([j + 0.5 for j in range(len(elrs))])
+    ax.set_xticklabels(['encoder-lr %s' % e for _, e in elrs], color=t['ink'], fontsize=10)
+    ax.xaxis.tick_top()
+    estilo(fig, ax, t)
+    ax.tick_params(axis='both', labelcolor=t['ink'], pad=14)
+
+    barra = fig.colorbar(ScalarMappable(norm=norm, cmap=cmap), ax=ax, orientation='horizontal',
+                         fraction=0.035, pad=0.04, aspect=40)
+    barra.outline.set_visible(False)
+    barra.ax.tick_params(colors=t['ink2'], labelsize=9, length=0)
+    barra.set_label('mejor mIoU de validación de cada corrida', color=t['ink2'], fontsize=9.5)
+
+    fig.suptitle('Cómo se eligió el modelo final',
+                 color=t['ink'], fontsize=12.5, x=0.012, ha='left', y=0.975)
+    fig.text(0.012, 0.915, '72 corridas: 6 niveles de descongelado × 3 learning rates del encoder × 4 '
+             'repeticiones\nprimero la combinación con mejor media; dentro de ella, la mejor repetición',
+             color=t['ink2'], fontsize=9.5, ha='left', va='top', linespacing=1.5)
+    fig.subplots_adjust(left=0.2, right=0.97, top=0.8, bottom=0.1)
+    fig.savefig('docs/figuras/seleccion-%s.png' % modo, dpi=170, facecolor=t['surface'])
+    plt.close(fig)
+
+
 if __name__ == '__main__':
     ejemplos = [('volcano_island_frame_0155', 'volcano_island'),
                 ('lighthouse_frame_0120', 'lighthouse · escena nocturna'),
@@ -294,6 +360,7 @@ if __name__ == '__main__':
     for modo in ('light', 'dark'):
         fig_comparacion(modo)
         fig_descongelado(modo)
+        fig_seleccion(modo)
         fig_validacion_cruzada(modo)
         fig_entrenamiento_validacion(modo)
         fig_miou_validacion(modo)
