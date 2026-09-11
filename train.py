@@ -54,11 +54,11 @@ def train(args):
 
     print('device       :', device)
     print('torch        :', torch.__version__)
-    print('data-root    :', os.path.abspath(args.data_root))
+    print('data-root    :', args.data_root)
     print('tracks train :', split_tracks(args.data_root, 'train', val_tracks))
     print('tracks val   :', split_tracks(args.data_root, 'val', val_tracks))
     print('backbone     :', args.backbone, '| dim', args.dim, '| size', args.size)
-    print('out          :', out_path)
+    print('out          :', args.out)
 
     train_loader = load_data(args.data_root, 'train', val_tracks=val_tracks, size=(args.size, args.size),
                              batch_size=args.batch_size, num_workers=args.num_workers,
@@ -166,7 +166,7 @@ def train(args):
             best_iou = [float(v) for v in cm.class_iou]
             since_best = 0
             save_model(model, out_path)
-            print('nuevo mejor mIoU %.4f -> %s' % (best_miou, out_path))
+            print('nuevo mejor mIoU %.4f -> %s' % (best_miou, args.out))
         else:
             since_best += 1
             if args.early_stop and since_best >= args.early_stop:
@@ -195,7 +195,7 @@ def train(args):
             media = sum(cola) / len(cola)
             sigma = (sum((x - media) ** 2 for x in cola) / len(cola)) ** 0.5
     print('\nFIN. pico %.4f en la epoca %d | top5 %.4f | sigma %.4f  (modelo en %s)'
-          % (best_miou, best_epoch, top5, sigma, out_path))
+          % (best_miou, best_epoch, top5, sigma, args.out))
     return {'best_miou': best_miou, 'best_epoch': best_epoch, 'top5': top5,
             'sigma': sigma, 'class_iou': best_iou or [float('nan')] * NUM_CLASSES,
             'out': out_path}

@@ -73,7 +73,8 @@ def main():
            ('combinacion', 'backbone', 'size', 'dim', 'lr', 'power', 'mIoU'))
     hdr += ' '.join('%6s' % s for s in CORTO) + '  %4s %6s' % ('ep', 'min')
     print('=' * len(hdr))
-    print('BARRIDO CONSOLIDADO — %d combinaciones de %d fichero(s)' % (len(unicas), len(ficheros)))
+    print('BARRIDO CONSOLIDADO — %d combinaciones distintas (%d corridas) de %d fichero(s)'
+          % (len(unicas), len(filas), len(ficheros)))
     print('=' * len(hdr))
     print(hdr)
     print('-' * len(hdr))
