@@ -91,8 +91,9 @@ mIoU alto y falso.
 | entrenamiento | `abyss`, `gran_paradiso_island`, `hacienda`, `olivermath` | 1000 |
 | validación | `lighthouse`, `volcano_island` | 500 |
 
-El desbalance de clases es extremo, por eso la métrica es el IoU por clase y no la accuracy,
-y la pérdida va ponderada:
+El desbalance de clases es extremo: `background` y `track` concentran el 97.4% de los píxeles
+y `projectile` el 0.010%. Por eso la métrica es el IoU por clase y no la accuracy, y la pérdida
+va ponderada:
 
 | clase | % de píxeles | frames con la clase | peso en la pérdida |
 |---|---|---|---|
@@ -129,6 +130,9 @@ referencia es una U-Net entrenada desde cero con el mismo dataset y el mismo spl
 | nitro | **0.5352** | 0.4562 | −0.079 |
 | **mIoU** | 0.4629 | **0.6008** | **+0.138** |
 
+SAM 2 gana en 6 de las 7 clases, una mejora relativa del 29.8% en mIoU, con una accuracy
+global de 0.9327.
+
 ---
 
 ## Experimentos
@@ -140,11 +144,13 @@ la media de sus 5 mejores épocas de validación, más estable que el pico.
 |---|---|---|
 | backbone × `dim` × `lr` × exponente de pesos | 24 | `large` +0.020 sobre `small`; `dim` 256 +0.020 sobre 128; `lr` y exponente, sin efecto |
 | backbone × resolución × `dim` | 7 | 1024 px no mejora a 448 px; `dim` 512 empeora (−0.012) |
-| descongelado del encoder × `encoder-lr` × 4 repeticiones | 74 | el encoder entero con `encoder-lr` 1e-5 es la mejor combinación |
+| descongelamiento del cuello FPN | 2 | el cuello por sí solo empeora (−0.017) |
+| descongelado del encoder × `encoder-lr` × 4 repeticiones | 72 | el encoder entero con `encoder-lr` 1e-5 es la mejor combinación |
 | validación cruzada por circuito | 8 | afinar el encoder mejora en los 3 pliegues, +0.037 de media |
 
-Entre 12 corridas idénticas el `top5` varía con σ 0.011, así que se comparan medias y no
-corridas sueltas.
+En conjunto suman 2898 épocas, 368 750 retropropagaciones y 21.5 h de GPU NVIDIA H200. Entre
+12 corridas idénticas el `top5` varía con σ 0.011, así que se comparan medias y no corridas
+sueltas.
 
 ### Cuánto descongelar el encoder
 
@@ -193,7 +199,8 @@ pliegues, **+0.037**, es la estimación realista.
   <img src="docs/figuras/entrenamiento-validacion-light.png" alt="Pérdida de entrenamiento y de validación por época">
 </picture>
 
-La pérdida de entrenamiento sigue bajando y la de validación se estanca desde la época 3.
+La pérdida de entrenamiento sigue bajando y la de validación se estanca desde la época 3: en
+la época guardada, la de validación es 7.3 veces la de entrenamiento.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figuras/miou-validacion-dark.png">
